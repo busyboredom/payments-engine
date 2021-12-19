@@ -1,0 +1,6 @@
+type,       client,  tx, amount
+deposit,         1,   1,    12345.67891
+deposit,         1,   2,    1
+withdrawal,      1,   3,    2
+dispute,         1,   1,
+chargeback,      1,   1,

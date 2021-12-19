@@ -2,17 +2,17 @@ use std::ops::{Add, AddAssign, Div, Rem, SubAssign};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 pub struct Transaction {
     #[serde(rename = "type")]
     pub tx_type: TxType,
     pub client: u16,
     #[serde(rename = "tx")]
     pub id: u32,
-    pub amount: Amount,
+    pub amount: Option<Amount>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub enum TxType {
     #[serde(rename = "deposit")]
     Deposit,
@@ -28,13 +28,17 @@ pub enum TxType {
 
 // Amounts in the input file are fixed-precision (4 decimal places), so using a float can cause
 // inaccuracies in edge cases. We will use a custom fixed-precision datatype instead.
-#[derive(PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Default)]
+#[derive(PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialOrd, Ord)]
 #[serde(from = "f64", into = "f64")]
 pub struct Amount(pub u64);
 
 impl Amount {
     pub fn checked_sub(self, rhs: Amount) -> Option<Amount> {
         self.0.checked_sub(rhs.0).map(Amount)
+    }
+
+    pub fn saturating_sub(self, rhs: Amount) -> Amount {
+        Amount(self.0.saturating_sub(rhs.0))
     }
 }
 
