@@ -489,4 +489,41 @@ mod test {
             )])
         );
     }
+
+    #[test]
+    fn large_dataset() {
+        let path = Path::new("test/data/large_dataset.csv");
+        if !path.exists() {
+            let mut writer = csv::Writer::from_path("test/data/large_dataset.csv")
+                .expect("failed to create large dataset");
+
+            for i in 0..1_000_000 {
+                let transaction = Transaction {
+                    tx_type: TxType::Deposit,
+                    client: 1,
+                    id: i,
+                    amount: Some(Amount(12345)),
+                };
+                writer
+                    .serialize(transaction)
+                    .expect("failed to write transaction to large dataset");
+            }
+        }
+
+        let accounts = process_transactions(Path::new("test/data/large_dataset.csv"));
+
+        assert_eq!(
+            accounts,
+            HashMap::from([(
+                1,
+                Account {
+                    client: 1,
+                    available: Amount(12345000000),
+                    held: Amount(0),
+                    total: Amount(12345000000),
+                    locked: false,
+                }
+            )])
+        );
+    }
 }

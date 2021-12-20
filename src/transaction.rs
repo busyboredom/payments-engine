@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign, Div, Rem, SubAssign};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, Serialize)]
 pub struct Transaction {
     #[serde(rename = "type")]
     pub tx_type: TxType,
@@ -12,7 +12,7 @@ pub struct Transaction {
     pub amount: Option<Amount>,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Serialize)]
 pub enum TxType {
     #[serde(rename = "deposit")]
     Deposit,
