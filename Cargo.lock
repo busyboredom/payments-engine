@@ -55,6 +55,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
+name = "payments-engine"
+version = "0.1.0"
+dependencies = [
+ "csv",
+ "serde",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -113,14 +121,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
-]
-
-[[package]]
-name = "transaction-engine"
-version = "0.1.0"
-dependencies = [
- "csv",
- "serde",
 ]
 
 [[package]]
