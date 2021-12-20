@@ -41,7 +41,8 @@ between threads by client id to avoid locking on shared resources.
 Maintainability was a priority during the development of this payments engine. The code is well
 commented, errors never pass by silently, and the unit test coverage is respectable. The code has
 also been divided into small functions and modules, enabling future developers to focus only on the
-components they are interested in.
+components they are interested in. Finally, clippy and rustfmt were used extensively to ensure the
+code follows the commonly accepted best-practices for formatting and style. 
 
 ## Future Improvements
 Time permitting, there are many improvements that could be made to this project. The code could be
