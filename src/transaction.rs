@@ -46,7 +46,8 @@ impl Amount {
 impl From<f64> for Amount {
     fn from(float: f64) -> Amount {
         if float < 0.0 || float > u64::MAX as f64 / 10_000.0 {
-            panic!("cannot represent transaction amount with fixed precision of 4 decimal places")
+            eprintln!("Transaction amount is negative or too large; replacing amount with 0");
+            return Amount(0);
         }
         Amount((float * 10_000.0).floor() as u64)
     }

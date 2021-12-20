@@ -12,6 +12,7 @@ use std::cmp::min;
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::process;
 use std::{collections::HashMap, env};
 
 use csv::Reader;
@@ -23,7 +24,8 @@ fn main() {
     // Get file path from argument.
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        panic!("expected one argument, but received {}", args.len() - 1);
+        eprintln!("Expected one argument, but received {}", args.len() - 1);
+        process::exit(1);
     }
     let transactions_path = &args[1];
 
@@ -34,36 +36,62 @@ fn main() {
     let mut wtr = csv::Writer::from_writer(io::stdout());
     for account in accounts.values() {
         wtr.serialize(account)
-            .expect("failed to write account details to stdout");
+            .or_else::<csv::Error, _>(|e| {
+                eprintln!("Failed to write account details to stdout: {}", e);
+                process::exit(1)
+            })
+            .unwrap();
     }
-    wtr.flush().expect("failed to flush output to stdout");
+    wtr.flush()
+        .or_else::<csv::Error, _>(|e| {
+            eprintln!("Failed to flush output to stdout: {}", e);
+            process::exit(1)
+        })
+        .unwrap();
 }
 
 /// Reads csv from provided path, and returns account balances resulting from the described
 /// transactions.
+#[allow(clippy::blocks_in_if_conditions)]
 fn process_transactions<P: AsRef<Path>>(path: P) -> HashMap<u16, Account> {
     // Prepare csv reader.
     let mut transactions_reader = csv::ReaderBuilder::new()
         .trim(csv::Trim::All)
         .from_path(path)
-        .expect("failed to read csv");
+        .or_else::<csv::Error, _>(|e| {
+            eprintln!("Failed to read csv: {}", e);
+            process::exit(1)
+        })
+        .unwrap();
 
     let mut accounts: HashMap<u16, Account> = HashMap::new();
     let mut raw_record = csv::ByteRecord::new();
     let headers = transactions_reader
         .byte_headers()
-        .expect("failed to read headers from csv")
+        .or_else::<csv::Error, _>(|e| {
+            eprintln!("Failed to read headers from csv: {}", e);
+            process::exit(1)
+        })
+        .unwrap()
         .clone();
     let mut disputed_transactions: HashMap<u32, Transaction> = HashMap::new();
 
     // Read csv line by line, updating account balances as we go.
     while transactions_reader
         .read_byte_record(&mut raw_record)
-        .expect("failed to read row of csv")
+        .or_else::<csv::Error, _>(|e| {
+            eprintln!("Failed to read row from csv: {}", e);
+            process::exit(1)
+        })
+        .unwrap()
     {
-        let transaction: Transaction = raw_record
-            .deserialize(Some(&headers))
-            .expect("failed to deserialize transaction from csv");
+        let transaction: Transaction = match raw_record.deserialize(Some(&headers)) {
+            Err(e) => {
+                eprintln!("Failed to deserialize transaction from csv: {}", e);
+                continue;
+            }
+            Ok(tx) => tx,
+        };
 
         match transaction.tx_type {
             TxType::Deposit => deposit(&mut accounts, &transaction),
@@ -107,6 +135,11 @@ fn withdrawal(accounts: &mut HashMap<u16, Account>, transaction: &Transaction) {
     {
         account.available = available;
         account.total -= transaction.amount.unwrap_or_default();
+    } else {
+        eprintln!(
+            "Failed to withdraw from account of client {} due to insufficient funds.",
+            account.client
+        );
     };
 }
 
@@ -121,33 +154,47 @@ fn dispute(
     let position = transactions_reader.position().clone();
     transactions_reader
         .seek(csv::Position::new())
-        .expect("failed to seek to beginning of csv");
+        .or_else::<csv::Error, _>(|e| {
+            eprintln!("Failed to seek to beginning of csv: {}", e);
+            process::exit(1)
+        })
+        .unwrap();
 
     // Read past header row.
     let mut raw_record = csv::ByteRecord::new();
     transactions_reader
         .read_byte_record(&mut raw_record)
-        .expect("failed to read csv headers");
+        .or_else::<csv::Error, _>(|e| {
+            eprintln!("Failed to read csv headers: {}", e);
+            process::exit(1)
+        })
+        .unwrap();
+
+    // Prepare iterator.
+    let mut tx_iter = transactions_reader.deserialize().map(|tx_or_err| {
+        tx_or_err
+            .or_else::<csv::Error, _>(|e| {
+                eprintln!("Failed to read row from csv as Transaction: {}", e);
+                process::exit(1)
+            })
+            .unwrap()
+    });
 
     // If the disputed transaction doesn't exist, we do nothing.
-    if let Some(disputed_tx) = transactions_reader
-        .deserialize()
-        .map(|tx_or_err| tx_or_err.expect("failed to parse csv row as Transaction"))
-        .find(|tx: &Transaction| tx.id == transaction.id)
-    {
+    if let Some(disputed_tx) = tx_iter.find(|tx: &Transaction| tx.id == transaction.id) {
         let account = accounts
             .entry(transaction.client)
             .or_insert_with(|| Account::new(transaction.client));
 
         // Don't allow disputing someone else's transaction.
         if transaction.client != disputed_tx.client {
-            // Ideally we would log an error here.
+            eprintln!("Dispute must be initiated by owner of disputed transaction");
             return;
         }
 
         // Only allow disputing Deposits.
         if disputed_tx.tx_type != TxType::Deposit {
-            // Ideally we would log an error here.
+            eprintln!("Only deposits can be disputed");
             return;
         }
 
@@ -160,6 +207,8 @@ fn dispute(
             .saturating_sub(disputed_tx.amount.unwrap_or_default());
 
         disputed_transactions.insert(disputed_tx.id, disputed_tx);
+    } else {
+        eprintln!("Failed to dispute transaction: transaction does not exist");
     }
 
     // Return to current row.
@@ -192,6 +241,8 @@ fn resolve(
         // Set held equal to the amount disputed, unless total balance is smaller.
         account.held = min(amount_disputed, account.total);
         account.available = account.total.saturating_sub(account.held);
+    } else {
+        eprintln!("Failed to resolve dispute: transaction is not disputed");
     }
 }
 
@@ -217,6 +268,8 @@ fn chargeback(
 
         // Lock account.
         account.locked = true;
+    } else {
+        eprintln!("Failed to chargeback dispute: transaction is not disputed");
     }
 }
 
